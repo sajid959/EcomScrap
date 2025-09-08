@@ -1,5 +1,6 @@
 {
   "name": "Deal-Hydra-Collector-Prod",
+  "active": false,
   "nodes": [
     {
       "name": "Kickstart Cron",
