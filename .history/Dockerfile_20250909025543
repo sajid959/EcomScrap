@@ -2,10 +2,10 @@
 FROM n8nio/n8n:latest
 
 # Set working directory
-WORKDIR /data
+WORKDIR /root/.n8n
 
 # Copy workflow file
-COPY workflow.json /data/workflow.json
+COPY deal-hydra-workflow.json /root/.n8n/workflows/deal-hydra-workflow.json
 
 # Set default environment variables (override with .env)
 ENV N8N_BASIC_AUTH_ACTIVE=true
@@ -21,4 +21,4 @@ ENV GENERIC_TIMEZONE=Asia/Kolkata
 EXPOSE 5678
 
 # Run n8n
-CMD ["n8n", "start", "--tunnel","--import", "/data/workflow.json"]
+CMD ["n8n", "start", "--tunnel"]
