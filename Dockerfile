@@ -22,5 +22,5 @@ ENV N8N_IMPORT=/data/workflows
 # Expose n8n port
 EXPOSE 5678
 
-# Start n8n with tunnel enabled
-CMD ["n8n", "start", "--tunnel"]
+# Start n8n using full path to avoid "command not found"
+CMD ["/home/node/.nvm/versions/node/v18.16.0/bin/n8n", "start", "--tunnel"]
