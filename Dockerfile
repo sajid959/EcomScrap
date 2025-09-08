@@ -4,10 +4,10 @@ FROM n8nio/n8n:latest
 # Set working directory
 WORKDIR /data
 
-# Copy workflow file
-COPY workflow.json /data/workflow.json
+# Copy workflow file into a folder (n8n expects a folder for --import)
+COPY workflow.json /data/workflows/workflow.json
 
-# Set default environment variables (override with .env)
+# Environment variables
 ENV N8N_BASIC_AUTH_ACTIVE=true
 ENV N8N_BASIC_AUTH_USER=admin
 ENV N8N_BASIC_AUTH_PASSWORD=changeme
@@ -16,9 +16,11 @@ ENV N8N_PORT=5678
 ENV NODE_ENV=production
 ENV EXECUTIONS_PROCESS=main
 ENV GENERIC_TIMEZONE=Asia/Kolkata
+ENV N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+ENV N8N_IMPORT=/data/workflows
 
-# Expose port
+# Expose n8n port
 EXPOSE 5678
 
-# Run n8n
-CMD ["n8n", "start", "--tunnel","--import", "/data/workflow.json"]
+# Start n8n with tunnel enabled
+CMD ["n8n", "start", "--tunnel"]
