@@ -2,7 +2,7 @@ FROM n8nio/n8n:latest
 
 WORKDIR /data
 
-# Put workflow in a folder
+# Copy workflows into folder
 COPY workflow.json /data/workflows/workflow.json
 
 # Environment variables
@@ -15,9 +15,8 @@ ENV NODE_ENV=production
 ENV EXECUTIONS_PROCESS=main
 ENV GENERIC_TIMEZONE=Asia/Kolkata
 ENV N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-ENV N8N_IMPORT=/data/workflows
 
 EXPOSE 5678
-ENTRYPOINT ["sh", "-c", "which n8n && n8n start --tunnel"]
-# Use the command exactly as the image expects
-#CMD ["n8n", "start", "--tunnel"]
+
+# Import workflows on startup, then launch n8n
+ENTRYPOINT ["sh", "-c", "n8n import:workflow --input=/data/workflows --separate --overwrite && n8n start --tunnel"]
