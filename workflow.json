@@ -8,7 +8,13 @@
       "typeVersion": 1,
       "position": [150, 200],
       "parameters": {
-        "triggerTimes": [{ "mode": "interval", "value": 2, "unit": "minutes" }]
+        "triggerTimes": [
+          {
+            "mode": "interval",
+            "value": 2,
+            "unit": "minutes"
+          }
+        ]
       }
     },
     {
@@ -20,12 +26,18 @@
         "url": "={{ $env.VAULT_URL }}",
         "method": "GET",
         "responseFormat": "json",
-        "options": { "timeout": 8000, "retry": 3 },
+        "options": {
+          "timeout": 8000,
+          "retry": 3,
+          "continueOnFail": true
+        },
         "headers": {
           "Authorization": "Bearer {{$env.VAULT_TOKEN}}"
         }
       }
     },
+
+    /* ---------- FETCH NODES: Browser and HTTP requests (all continueOnFail) ---------- */
     {
       "name": "Flipkart Fetch",
       "type": "n8n-nodes-base.browser",
@@ -34,14 +46,24 @@
       "parameters": {
         "url": "={{ 'https://www.flipkart.com/search?q=' + ($json.keywords || 'electronics') }}",
         "actions": [
-          { "action": "waitForSelector", "selector": "._1AtVbE, ._2kHMtA", "timeout": 12000 },
+          {
+            "action": "waitForSelector",
+            "selector": "._1AtVbE, ._2kHMtA",
+            "timeout": 12000
+          },
           {
             "action": "evaluate",
-            "script": "return Array.from(document.querySelectorAll('._2kHMtA')).map(n => {\n  const title = n.querySelector('._4rR01T')?.innerText || null;\n  const price = n.querySelector('._30jeq3')?.innerText || null;\n  const mrp = n.querySelector('._3I9_wc')?.innerText || null;\n  const link = n.querySelector('a')?.href || null;\n  return { vendor: 'Flipkart', title, price, mrp, url: link, timestamp: new Date().toISOString() };\n});"
+            "script": "try{\n  return Array.from(document.querySelectorAll('._2kHMtA')).map(n => {\n    const title = n.querySelector('._4rR01T')?.innerText || null;\n    const price = n.querySelector('._30jeq3')?.innerText || null;\n    const mrp = n.querySelector('._3I9_wc')?.innerText || null;\n    const link = n.querySelector('a')?.href || null;\n    return { vendor: 'Flipkart', title, price, mrp, url: link, timestamp: new Date().toISOString() };\n  });\n}catch(e){\n  return [{ error: 'eval_failed', message: e && e.message }];\n}"
           }
         ],
-        "launchOptions": { "headless": true, "args": ["--no-sandbox", "--disable-dev-shm-usage"] },
-        "options": { "timeout": 20000 }
+        "launchOptions": {
+          "headless": true,
+          "args": ["--no-sandbox", "--disable-dev-shm-usage"]
+        },
+        "options": {
+          "timeout": 20000,
+          "continueOnFail": true
+        }
       }
     },
     {
@@ -53,9 +75,17 @@
         "url": "https://www.amazon.in/s",
         "method": "GET",
         "responseFormat": "string",
-        "queryParameters": { "k": "={{ $json.keywords || 'electronics' }}" },
-        "headers": { "User-Agent": "Mozilla/5.0" },
-        "options": { "timeout": 15000, "retry": 2 }
+        "queryParameters": {
+          "k": "={{ $json.keywords || 'electronics' }}"
+        },
+        "headers": {
+          "User-Agent": "Mozilla/5.0"
+        },
+        "options": {
+          "timeout": 15000,
+          "retry": 2,
+          "continueOnFail": true
+        }
       }
     },
     {
@@ -67,8 +97,13 @@
         "url": "https://www.myntra.com/{{ $json.keywords || 'men-tshirts' }}",
         "method": "GET",
         "responseFormat": "string",
-        "headers": { "User-Agent": "Mozilla/5.0" },
-        "options": { "timeout": 12000 }
+        "headers": {
+          "User-Agent": "Mozilla/5.0"
+        },
+        "options": {
+          "timeout": 12000,
+          "continueOnFail": true
+        }
       }
     },
     {
@@ -80,10 +115,17 @@
         "url": "https://www.ajio.com/search/?text={{ $json.keywords || 'electronics' }}",
         "method": "GET",
         "responseFormat": "string",
-        "headers": { "User-Agent": "Mozilla/5.0" },
-        "options": { "timeout": 12000 }
+        "headers": {
+          "User-Agent": "Mozilla/5.0"
+        },
+        "options": {
+          "timeout": 12000,
+          "continueOnFail": true
+        }
       }
     },
+
+    /* ---------- NORMALIZATION: robust extraction and canonicalization ---------- */
     {
       "name": "Normalize & Extract",
       "type": "n8n-nodes-base.code",
@@ -91,9 +133,11 @@
       "position": [1000, 200],
       "parameters": {
         "language": "JavaScript",
-        "code": "const norm = s => s ? Number(String(s).replace(/[^0-9.]/g, '')) : null;\nreturn items.flatMap(i => {\n  if (typeof i.json === 'string') {\n    const prices = [...i.json.matchAll(/₹\\s*([0-9,]+)/g)].slice(0,5);\n    return prices.map(m => ({ json: { vendor: 'Amazon', price: norm(m[1]), mrp: norm(m[1])*10, timestamp: new Date().toISOString() } }));\n  }\n  return [{ json: i.json }];\n});"
+        "code": "const norm = s => {\n  try{\n    if(!s && typeof s !== 'string') return null;\n    const cleaned = String(s).replace(/[^0-9.]/g, '');\n    if(!cleaned) return null;\n    return Number(cleaned.replace(/,/g,''));\n  }catch(e){ return null; }\n};\n\n// if incoming data is raw HTML string (Amazon/Myntra/Ajio) try to extract prices safely\nconst results = [];\nfor(const i of items){\n  try{\n    if(typeof i.json === 'string'){\n      // extract up to 5 price occurrences\n      const text = i.json;\n      const re = /₹\\s*([0-9,]+)/g;\n      const matches = Array.from(text.matchAll(re)).slice(0,5);\n      if(matches.length){\n        for(const m of matches){\n          const p = norm(m[1]);\n          if(p) results.push({ json: { vendor: 'Amazon/Other', price: p, mrp: null, url: null, timestamp: new Date().toISOString() } });\n        }\n      } else {\n        results.push({ json: { vendor: 'Amazon/Other', raw: text.slice(0,200) } });\n      }\n    } else if(Array.isArray(i.json)){\n      // already a list from browser evaluate (Flipkart)\n      for(const row of i.json){\n        try{\n          if(row && row.price){\n            results.push({ json: { vendor: row.vendor||'Flipkart', title: row.title||null, price: norm(row.price), mrp: norm(row.mrp), url: row.url||null, timestamp: row.timestamp||new Date().toISOString() } });\n          } else if(row && row.error){\n            results.push({ json: { vendor: 'Flipkart', error: row } });\n          }\n        }catch(e){ results.push({ json: { vendor: 'Flipkart', error: e.message } }); }\n      }\n    } else {\n      results.push({ json: i.json });\n    }\n  }catch(e){ results.push({ json: { error: 'normalize_failed', message: e && e.message } }); }\n}\n\nreturn results;"
       }
     },
+
+    /* ---------- Baseline lookup: safe DB call + fallback ---------- */
     {
       "name": "Baseline Lookup",
       "type": "n8n-nodes-base.postgres",
@@ -103,8 +147,25 @@
         "operation": "executeQuery",
         "query": "SELECT median_price FROM price_baseline WHERE sku = {{ $json.sku ? '\\''+$json.sku+'\\'' : 'NULL' }} LIMIT 1;"
       },
-      "credentials": { "postgres": "POSTGRES_CONN" }
+      "credentials": {
+        "postgres": "POSTGRES_CONN"
+      },
+      "notesInFlow": true,
+      "alwaysOutputData": false,
+      "disabled": false
     },
+    {
+      "name": "Baseline Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1500, 200],
+      "parameters": {
+        "language": "JavaScript",
+        "code": "return items.map(it => {\n  try{\n    const db = it.json['Baseline Lookup'];\n    const baseline = db && db[0] && db[0].median_price ? Number(db[0].median_price) : (it.json.mrp || it.json.price || null);\n    return { json: { ...it.json, baseline } };\n  }catch(e){\n    return { json: { ...it.json, baseline: it.json.mrp || it.json.price || null, baseline_error: e.message } };\n  }\n});"
+      }
+    },
+
+    /* ---------- ML Scorer: safe POST with fallback ---------- */
     {
       "name": "ML Scorer",
       "type": "n8n-nodes-base.httpRequest",
@@ -115,101 +176,467 @@
         "method": "POST",
         "responseFormat": "json",
         "jsonParameters": true,
-        "bodyParametersJson": "{ \"title\": \"{{$json.title}}\", \"price\": {{$json.price}}, \"mrp\": {{$json.mrp}}, \"baseline\": {{$json['Baseline Lookup'].json[0]?.median_price}}, \"vendor\": \"{{$json.vendor}}\" }",
-        "options": { "timeout": 8000 }
+        "bodyParametersJson": "{ \"title\": \"{{$json.title||''}}\", \"price\": {{$json.price||null}}, \"mrp\": {{$json.mrp||null}}, \"baseline\": {{$json.baseline||null}}, \"vendor\": \"{{$json.vendor||''}}\" }",
+        "options": {
+          "timeout": 8000,
+          "continueOnFail": true
+        }
       }
     },
+    {
+      "name": "ML Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1850, 200],
+      "parameters": {
+        "language": "JavaScript",
+        "code": "return items.map(it => {\n  try{\n    const score = (it.json && it.json.score) || (it.json && it.json.result && it.json.result.score) || null;\n    return { json: { ...it.json, ml_score: score === null ? 0.5 : Number(score) } };\n  }catch(e){\n    return { json: { ...it.json, ml_score: 0.5, ml_error: e.message } };\n  }\n});"
+      }
+    },
+
+    /* ---------- Decision and dedupe ---------- */
     {
       "name": "Anomaly Decision",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1900, 200],
+      "position": [2050, 200],
       "parameters": {
         "language": "JavaScript",
-        "code": "return items.map(it => {\n  const price = it.json.price;\n  const baseline = it.json['Baseline Lookup']?.json[0]?.median_price || it.json.mrp || price;\n  const discount = baseline ? 1 - (price / baseline) : 0;\n  const ml = it.json['ML Scorer']?.json?.score || 0.5;\n  const flag = discount >= 0.95 && ml >= 0.85;\n  return { json: { ...it.json, baseline, discount, ml, flag } };\n});"
+        "code": "return items.map(it => {\n  try{\n    const price = Number(it.json.price || 0);\n    const baseline = Number(it.json.baseline || price || 0);\n    const discount = baseline ? (1 - (price / baseline)) : 0;\n    const ml = Number(it.json.ml_score || 0.5);\n    const flag = (discount >= 0.95) && (ml >= 0.85);\n    return { json: { ...it.json, baseline, discount, ml, flag } };\n  }catch(e){ return { json: { ...it.json, flag: false, decision_error: e.message } }; }\n});"
       }
     },
+
     {
-      "name": "Deduplicate (Redis)",
+      "name": "Deduplicate (Redis) - SET",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [2100, 200],
+      "position": [2250, 200],
       "parameters": {
         "operation": "set",
-        "key": "={{ 'deal:' + ($json.sku || encodeURIComponent($json.url)) + ':' + Math.round($json.price || 0) }}",
+        "key": "={{ 'deal:' + ($json.sku || encodeURIComponent($json.url||'')) + ':' + Math.round($json.price || 0) }}",
         "value": "locked",
         "expirationInSeconds": 86400,
         "setIfNotExists": true
       },
-      "credentials": { "redis": "REDIS_CONN" }
+      "credentials": {
+        "redis": "REDIS_CONN"
+      },
+      "notesInFlow": true,
+      "alwaysOutputData": false
     },
+
+    /* ---------- Filter for flagged deals ---------- */
     {
       "name": "Flag Filter",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [2250, 200],
+      "position": [2400, 200],
       "parameters": {
-        "conditions": { "boolean": [{ "value1": "={{ $json.flag }}", "operation": "isTrue" }] }
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.flag === true }}",
+              "operation": "isTrue"
+            }
+          ]
+        }
       }
     },
+
+    /* ---------- Telegram alert (safe) ---------- */
     {
       "name": "Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [2500, 200],
+      "position": [2650, 200],
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "🔥 Glitch Alert!\n*{{ $json.title }}*\nPrice: ₹{{ $json.price }} ({{ Math.round($json.discount*100) }}% off)\nConfidence: {{ Math.round($json.ml*100) }}%\n[Open Link]({{ $json.url }})",
-        "optionsJson": "{ \"reply_markup\": { \"inline_keyboard\": [[ { \"text\": \"Approve\", \"callback_data\": \"approve::{{ $json.sku }}\" }, { \"text\": \"Reject\", \"callback_data\": \"reject::{{ $json.sku }}\" } ]] } }"
+        "text": "🔥 Glitch Alert!\n*{{ $json.title || 'No title' }}*\nPrice: ₹{{ $json.price }} ({{ Math.round(($json.discount||0)*100) }}% off)\nConfidence: {{ Math.round(($json.ml||$json.ml_score||0.5)*100) }}%\n[Open Link]({{ $json.url || '' }})",
+        "optionsJson": "{ \"parse_mode\": \"Markdown\", \"disable_web_page_preview\": true }"
       },
-      "credentials": { "telegramApi": "TELEGRAM_BOT" }
+      "credentials": {
+        "telegramApi": "TELEGRAM_BOT"
+      }
     },
+
+    /* ---------- Telegram fallback logger: if Telegram fails, record to Postgres ---------- */
+    {
+      "name": "Alert Logger (Postgres)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [2850, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO alert_logs (title, price, discount, ml, vendor, url, payload, created_at) VALUES ({{ $json.title ? '\\''+$json.title.replace(/'/g,\"''\")+'\\'' : 'NULL' }}, {{ $json.price || 'NULL' }}, {{ $json.discount || 'NULL' }}, {{ $json.ml || $json.ml_score || 'NULL' }}, {{ $json.vendor ? '\\''+$json.vendor+'\\'' : 'NULL' }}, {{ $json.url ? '\\''+$json.url+'\\'' : 'NULL' }}, {{ $json ? '\\''+JSON.stringify($json).replace(/'/g, \"''\")+'\\'' : 'NULL' }}, now());"
+      },
+      "credentials": {
+        "postgres": "POSTGRES_CONN"
+      }
+    },
+
+    /* ---------- Checkout Guard (browser) safe attempt ---------- */
     {
       "name": "Checkout Guard",
       "type": "n8n-nodes-base.browser",
       "typeVersion": 1,
-      "position": [2800, 200],
+      "position": [3000, 200],
       "parameters": {
         "url": "={{ $json.url }}",
         "actions": [
-          { "action": "waitForSelector", "selector": "body", "timeout": 8000 },
-          { "action": "click", "selector": "button.add-to-cart, a.add-to-cart", "timeout": 5000, "ignoreErrors": true }
+          {
+            "action": "waitForSelector",
+            "selector": "body",
+            "timeout": 8000
+          },
+          {
+            "action": "click",
+            "selector": "button.add-to-cart, a.add-to-cart",
+            "timeout": 5000,
+            "ignoreErrors": true
+          }
         ],
-        "launchOptions": { "headless": true, "args": ["--no-sandbox"] }
+        "launchOptions": {
+          "headless": true,
+          "args": ["--no-sandbox"]
+        },
+        "options": {
+          "timeout": 20000,
+          "continueOnFail": true
+        }
       }
     },
+
+    /* ---------- Log Deal to Postgres (safe) ---------- */
     {
       "name": "Log Deal",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
-      "position": [3100, 200],
+      "position": [3300, 200],
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO deals (sku, title, price, baseline, discount, vendor, url, created_at) VALUES ({{ $json.sku ? '\\''+$json.sku+'\\'' : 'NULL' }}, {{ $json.title ? '\\''+$json.title.replace(/'/g,\"''\")+'\\'' : 'NULL' }}, {{ $json.price }}, {{ $json.baseline || 'NULL' }}, {{ $json.discount }}, {{ $json.vendor ? '\\''+$json.vendor+'\\'' : 'NULL' }}, {{ $json.url ? '\\''+$json.url+'\\'' : 'NULL' }}, now());"
+        "query": "INSERT INTO deals (sku, title, price, baseline, discount, vendor, url, created_at) VALUES ({{ $json.sku ? '\\''+$json.sku+'\\'' : 'NULL' }}, {{ $json.title ? '\\''+$json.title.replace(/'/g,\"''\")+'\\'' : 'NULL' }}, {{ $json.price || 'NULL' }}, {{ $json.baseline || 'NULL' }}, {{ $json.discount || 'NULL' }}, {{ $json.vendor ? '\\''+$json.vendor+'\\'' : 'NULL' }}, {{ $json.url ? '\\''+$json.url+'\\'' : 'NULL' }}, now());"
       },
-      "credentials": { "postgres": "POSTGRES_CONN" }
+      "credentials": {
+        "postgres": "POSTGRES_CONN"
+      }
+    },
+
+    /* ---------- Generic Error Reporter (non-blocking) ---------- */
+    {
+      "name": "Format Error Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1500, 520],
+      "parameters": {
+        "language": "JavaScript",
+        "code": "return items.map(i => {\n  try{\n    const err = i.json.error || i.json.error_message || i.json.normalize_error || null;\n    const nodeName = i.json.__nodeName || i.json.node || 'unknown';\n    const payload = { node: nodeName, error: err, data: i.json };\n    return { json: payload };\n  }catch(e){ return { json: { node: 'Format Error Report', error: e.message } }; }\n});"
+      }
+    },
+    {
+      "name": "Send Error to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1700, 520],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "⚠️ Workflow Error\\nNode: {{$json.node}}\\nError: {{$json.error || 'unknown'}}\\nPayload snippet: {{$json.data ? JSON.stringify($json.data).slice(0,200) : 'n/a'}}"
+      },
+      "credentials": {
+        "telegramApi": "TELEGRAM_BOT"
+      }
+    },
+    {
+      "name": "Error Logger (Postgres)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1900, 520],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO workflow_errors (node, message, payload, created_at) VALUES ({{ $json.node ? '\\''+$json.node+'\\'' : 'NULL' }}, {{ $json.error ? '\\''+$json.error.replace(/'/g,\"''\")+'\\'' : 'NULL' }}, {{ $json.data ? '\\''+JSON.stringify($json.data).replace(/'/g,\"''\")+'\\'' : 'NULL' }}, now());"
+      },
+      "credentials": {
+        "postgres": "POSTGRES_CONN"
+      }
     }
   ],
   "connections": {
-    "Kickstart Cron": { "main": [[{ "node": "Load Config (Vault)", "type": "main", "index": 0 }]] },
-    "Load Config (Vault)": { "main": [[
-      { "node": "Flipkart Fetch", "type": "main", "index": 0 },
-      { "node": "Amazon Fetch", "type": "main", "index": 0 },
-      { "node": "Myntra Fetch", "type": "main", "index": 0 },
-      { "node": "Ajio Fetch", "type": "main", "index": 0 }
-    ]] },
-    "Flipkart Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
-    "Amazon Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
-    "Myntra Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
-    "Ajio Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
-    "Normalize & Extract": { "main": [[{ "node": "Baseline Lookup", "type": "main", "index": 0 }]] },
-    "Baseline Lookup": { "main": [[{ "node": "ML Scorer", "type": "main", "index": 0 }]] },
-    "ML Scorer": { "main": [[{ "node": "Anomaly Decision", "type": "main", "index": 0 }]] },
-    "Anomaly Decision": { "main": [[{ "node": "Deduplicate (Redis)", "type": "main", "index": 0 }]] },
-    "Deduplicate (Redis)": { "main": [[{ "node": "Flag Filter", "type": "main", "index": 0 }]] },
-    "Flag Filter": { "main": [[{ "node": "Telegram Alert", "type": "main", "index": 0 }]] },
-    "Telegram Alert": { "main": [[{ "node": "Checkout Guard", "type": "main", "index": 0 }]] },
-    "Checkout Guard": { "main": [[{ "node": "Log Deal", "type": "main", "index": 0 }]] }
+    "Kickstart Cron": {
+      "main": [
+        [
+          {
+            "node": "Load Config (Vault)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Config (Vault)": {
+      "main": [
+        [
+          {
+            "node": "Flipkart Fetch",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Amazon Fetch",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Myntra Fetch",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ajio Fetch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flipkart Fetch": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Amazon Fetch": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Myntra Fetch": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ajio Fetch": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Extract": {
+      "main": [
+        [
+          {
+            "node": "Baseline Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baseline Lookup": {
+      "main": [
+        [
+          {
+            "node": "Baseline Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Error Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baseline Fallback": {
+      "main": [
+        [
+          {
+            "node": "ML Scorer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ML Scorer": {
+      "main": [
+        [
+          {
+            "node": "ML Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Error Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ML Fallback": {
+      "main": [
+        [
+          {
+            "node": "Anomaly Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anomaly Decision": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate (Redis) - SET",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate (Redis) - SET": {
+      "main": [
+        [
+          {
+            "node": "Flag Filter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Error Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag Filter": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Alert": {
+      "main": [
+        [
+          {
+            "node": "Checkout Guard",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Deal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Logger (Postgres)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Error Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkout Guard": {
+      "main": [
+        [
+          {
+            "node": "Log Deal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Error Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Deal": {
+      "main": [
+        [
+          {
+            "node": "Format Error Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error Report": {
+      "main": [
+        [
+          {
+            "node": "Send Error to Telegram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Error Logger (Postgres)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Error to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Error Logger (Postgres)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   }
 }
