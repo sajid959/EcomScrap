@@ -1,11 +1,11 @@
-# Start from official n8n image (Alpine-based)
+# Start from official n8n Alpine-based image
 FROM n8nio/n8n:latest
 
-# Switch to root
+# Switch to root for package installs
 USER root
 WORKDIR /home/node
 
-# Install system dependencies for Chromium/Playwright on Alpine
+# Install dependencies for Chromium/Playwright
 RUN apk add --no-cache \
     udev \
     ttf-freefont \
@@ -22,12 +22,12 @@ RUN apk add --no-cache \
     xvfb \
     && rm -rf /var/cache/apk/*
 
-# Create custom nodes folder
+# Create custom node folder
 RUN mkdir -p /home/node/.n8n/custom
 
 # Install Browser node + Playwright
 RUN cd /home/node/.n8n/custom && npm init -y && \
-    npm install n8n-nodes-browser playwright
+    npm install --omit=dev n8n-nodes-browser playwright
 
 # Fix permissions
 RUN chown -R node:node /home/node/.n8n
@@ -52,5 +52,5 @@ ENV N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
 
 EXPOSE 5678
 
-# Import workflows & start
+# Import workflows & start n8n
 ENTRYPOINT ["sh", "-c", "n8n import:workflow --input=/data/workflows --separate --overwrite && n8n start --tunnel"]
