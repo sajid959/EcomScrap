@@ -8,195 +8,145 @@
       "typeVersion": 1,
       "position": [150, 200],
       "parameters": {
-        "triggerTimes": [
-          {
-            "mode": "interval",
-            "value": 2,
-            "unit": "minutes"
-          }
-        ]
-      }
-    },
-    {
-      "name": "Load Config (Vault)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [400, 200],
-      "parameters": {
-        "url": "={{ $env.VAULT_URL }}",
-        "method": "GET",
-        "responseFormat": "json",
-        "options": {
-          "timeout": 8000,
-          "retry": 3,
-          "continueOnFail": true
-        },
-        "headers": {
-          "Authorization": "Bearer {{$env.VAULT_TOKEN}}"
-        }
+        "triggerTimes": [{ "mode": "interval", "value": 2, "unit": "minutes" }]
       }
     },
     {
       "name": "Flipkart Fetch",
       "type": "n8n-nodes-base.browser",
       "typeVersion": 1,
-      "position": [700, 40],
+      "position": [400, 40],
       "parameters": {
         "url": "={{ 'https://www.flipkart.com/search?q=' + ($json.keywords || 'electronics') }}",
         "actions": [
-          {
-            "action": "waitForSelector",
-            "selector": "._1AtVbE, ._2kHMtA",
-            "timeout": 12000
-          },
+          { "action": "waitForSelector", "selector": "._1AtVbE, ._2kHMtA", "timeout": 12000 },
           {
             "action": "evaluate",
-            "script": "try{\n  return Array.from(document.querySelectorAll('._2kHMtA')).map(n => {\n    const title = n.querySelector('._4rR01T')?.innerText || null;\n    const price = n.querySelector('._30jeq3')?.innerText || null;\n    const mrp = n.querySelector('._3I9_wc')?.innerText || null;\n    const link = n.querySelector('a')?.href || null;\n    return { vendor: 'Flipkart', title, price, mrp, url: link, timestamp: new Date().toISOString() };\n  });\n}catch(e){\n  return [{ error: 'eval_failed', message: e && e.message }];\n}"
+            "script": "try { return Array.from(document.querySelectorAll('._2kHMtA')).map(n => { const title = n.querySelector('._4rR01T')?.innerText||null; const price = n.querySelector('._30jeq3')?.innerText||null; const mrp = n.querySelector('._3I9_wc')?.innerText||null; const link = n.querySelector('a')?.href||null; return { vendor: 'Flipkart', title, price, mrp, url: link, timestamp: new Date().toISOString() }; }); } catch(e){ return [{ error:'eval_failed', message:e.message }]; }"
           }
         ],
-        "launchOptions": {
-          "headless": true,
-          "args": ["--no-sandbox", "--disable-dev-shm-usage"]
-        },
-        "options": {
-          "timeout": 20000,
-          "continueOnFail": true
-        }
+        "launchOptions": { "headless": true, "args": ["--no-sandbox","--disable-dev-shm-usage"] },
+        "options": { "timeout": 20000, "continueOnFail": true }
       }
     },
     {
       "name": "Amazon Fetch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [700, 200],
+      "position": [400, 200],
       "parameters": {
         "url": "https://www.amazon.in/s",
         "method": "GET",
         "responseFormat": "string",
-        "queryParameters": {
-          "k": "={{ $json.keywords || 'electronics' }}"
-        },
-        "headers": {
-          "User-Agent": "Mozilla/5.0"
-        },
-        "options": {
-          "timeout": 15000,
-          "retry": 2,
-          "continueOnFail": true
-        }
+        "queryParameters": { "k": "={{ $json.keywords || 'electronics' }}" },
+        "headers": { "User-Agent": "Mozilla/5.0" },
+        "options": { "timeout": 15000, "retry": 2, "continueOnFail": true }
       }
     },
     {
       "name": "Myntra Fetch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [700, 360],
+      "position": [400, 360],
       "parameters": {
         "url": "https://www.myntra.com/{{ $json.keywords || 'men-tshirts' }}",
         "method": "GET",
         "responseFormat": "string",
-        "headers": {
-          "User-Agent": "Mozilla/5.0"
-        },
-        "options": {
-          "timeout": 12000,
-          "continueOnFail": true
-        }
+        "headers": { "User-Agent": "Mozilla/5.0" },
+        "options": { "timeout": 12000, "continueOnFail": true }
       }
     },
     {
       "name": "Ajio Fetch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [700, 520],
+      "position": [400, 520],
       "parameters": {
         "url": "https://www.ajio.com/search/?text={{ $json.keywords || 'electronics' }}",
         "method": "GET",
         "responseFormat": "string",
-        "headers": {
-          "User-Agent": "Mozilla/5.0"
-        },
-        "options": {
-          "timeout": 12000,
-          "continueOnFail": true
-        }
+        "headers": { "User-Agent": "Mozilla/5.0" },
+        "options": { "timeout": 12000, "continueOnFail": true }
       }
     },
     {
       "name": "Normalize & Extract",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1000, 200],
+      "position": [700, 200],
       "parameters": {
         "language": "JavaScript",
-        "code": "const norm = s => {\n  try{\n    if(!s || typeof s !== 'string') return null;\n    const cleaned = String(s).replace(/[^0-9.]/g, '');\n    if(!cleaned) return null;\n    return Number(cleaned.replace(/,/g,''));\n  }catch(e){ return null; }\n};\nconst results = [];\nfor(const i of items){\n  try{\n    if(typeof i.json === 'string'){\n      const text = i.json;\n      const re = /₹\\s*([0-9,]+)/g;\n      const matches = Array.from(text.matchAll(re)).slice(0,5);\n      if(matches.length){\n        for(const m of matches){\n          const p = norm(m[1]);\n          if(p) results.push({ json: { vendor: 'Amazon/Other', price: p, mrp: null, url: null, timestamp: new Date().toISOString() } });\n        }\n      } else {\n        results.push({ json: { vendor: 'Amazon/Other', raw: text.slice(0,200) } });\n      }\n    } else if(Array.isArray(i.json)){\n      for(const row of i.json){\n        try{\n          if(row && row.price){\n            results.push({ json: { vendor: row.vendor||'Flipkart', title: row.title||null, price: norm(row.price), mrp: norm(row.mrp), url: row.url||null, timestamp: row.timestamp||new Date().toISOString() } });\n          } else if(row && row.error){\n            results.push({ json: { vendor: 'Flipkart', error: row } });\n          }\n        }catch(e){ results.push({ json: { vendor: 'Flipkart', error: e.message } }); }\n      }\n    } else {\n      results.push({ json: i.json });\n    }\n  }catch(e){ results.push({ json: { error: 'normalize_failed', message: e && e.message } }); }\n}\nreturn results;"
+        "code": "const norm=s=>{try{if(!s||typeof s!=='string')return null; const cleaned=String(s).replace(/[^0-9.]/g,''); if(!cleaned)return null; return Number(cleaned.replace(/,/g,''));}catch(e){return null;}}; const results=[]; for(const i of items){try{if(typeof i.json==='string'){const text=i.json; const re=/₹\\s*([0-9,]+)/g; const matches=Array.from(text.matchAll(re)).slice(0,5); if(matches.length){for(const m of matches){const p=norm(m[1]); if(p) results.push({json:{vendor:'Amazon/Other', price:p, mrp:null, url:null, timestamp:new Date().toISOString()}});}} else {results.push({json:{vendor:'Amazon/Other', raw:text.slice(0,200)}});}} else if(Array.isArray(i.json)){for(const row of i.json){try{if(row&&row.price){results.push({json:{vendor:row.vendor||'Flipkart', title:row.title||null, price:norm(row.price), mrp:norm(row.mrp), url:row.url||null, timestamp:row.timestamp||new Date().toISOString()}});} else if(row&&row.error){results.push({json:{vendor:'Flipkart', error:row}});}}catch(e){results.push({json:{vendor:'Flipkart', error:e.message}});}}} else {results.push({json:i.json});}}catch(e){results.push({json:{error:'normalize_failed', message:e.message}});}} return results;"
       }
     },
     {
       "name": "Baseline Lookup",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
-      "position": [1300, 200],
+      "position": [1000, 200],
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT median_price FROM price_baseline WHERE sku = {{ $json.sku ? '\\''+$json.sku+'\\'' : 'NULL' }} LIMIT 1;"
       },
       "credentials": {
-        "postgres": "POSTGRES_CONN"
+        "postgres": {
+          "host": "={{ $env.SUPABASE_URL.replace('https://','').split('.')[0]+'.supabase.co' }}",
+          "port": 5432,
+          "database": "postgres",
+          "user": "postgres",
+          "password": "={{ $env.SUPABASE_KEY }}"
+        }
       }
     },
     {
       "name": "Baseline Fallback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1500, 200],
+      "position": [1200, 200],
       "parameters": {
         "language": "JavaScript",
-        "code": "return items.map(it => {\n  try{\n    const db = it.json['Baseline Lookup'];\n    const baseline = db && db[0] && db[0].median_price ? Number(db[0].median_price) : (it.json.mrp || it.json.price || null);\n    return { json: { ...it.json, baseline } };\n  }catch(e){\n    return { json: { ...it.json, baseline: it.json.mrp || it.json.price || null, baseline_error: e.message } };\n  }\n});"
+        "code": "return items.map(it=>{try{const db=it.json['Baseline Lookup'];const baseline=db&&db[0]&&db[0].median_price?Number(db[0].median_price):(it.json.mrp||it.json.price||null);return{json:{...it.json,baseline}};}catch(e){return{json:{...it.json,baseline:it.json.mrp||it.json.price||null,baseline_error:e.message}};}});"
       }
     },
     {
       "name": "ML Scorer",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [1700, 200],
+      "position": [1400, 200],
       "parameters": {
         "url": "={{ $env.ML_URL }}",
         "method": "POST",
         "responseFormat": "json",
         "jsonParameters": true,
         "bodyParametersJson": "{ \"title\": \"{{$json.title||''}}\", \"price\": {{$json.price||null}}, \"mrp\": {{$json.mrp||null}}, \"baseline\": {{$json.baseline||null}}, \"vendor\": \"{{$json.vendor||''}}\" }",
-        "options": {
-          "timeout": 8000,
-          "continueOnFail": true
-        }
+        "options": { "timeout": 8000, "continueOnFail": true }
       }
     },
     {
       "name": "ML Fallback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1850, 200],
+      "position": [1550, 200],
       "parameters": {
         "language": "JavaScript",
-        "code": "return items.map(it => {\n  try{\n    const score = (it.json && it.json.score) || (it.json && it.json.result && it.json.result.score) || null;\n    return { json: { ...it.json, ml_score: score === null ? 0.5 : Number(score) } };\n  }catch(e){\n    return { json: { ...it.json, ml_score: 0.5, ml_error: e.message } };\n  }\n});"
+        "code": "return items.map(it=>{try{const score=(it.json&&it.json.score)||(it.json&&it.json.result&&it.json.result.score)||null;return{json:{...it.json,ml_score:score===null?0.5:Number(score)}};}catch(e){return{json:{...it.json,ml_score:0.5,ml_error:e.message}};}});"
       }
     },
     {
       "name": "Anomaly Decision",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [2050, 200],
+      "position": [1700, 200],
       "parameters": {
         "language": "JavaScript",
-        "code": "return items.map(it => {\n  try{\n    const price = Number(it.json.price || 0);\n    const baseline = Number(it.json.baseline || price || 0);\n    const discount = baseline ? (1 - (price / baseline)) : 0;\n    const ml = Number(it.json.ml_score || 0.5);\n    const flag = (discount >= 0.95) && (ml >= 0.85);\n    return { json: { ...it.json, baseline, discount, ml, flag } };\n  }catch(e){ return { json: { ...it.json, flag: false, decision_error: e.message } }; }\n});"
+        "code": "return items.map(it=>{try{const price=Number(it.json.price||0);const baseline=Number(it.json.baseline||price||0);const discount=baseline?(1-(price/baseline)):0;const ml=Number(it.json.ml_score||0.5);const flag=(discount>=0.95)&&(ml>=0.85);return{json:{...it.json,baseline,discount,ml,flag}};}catch(e){return{json:{...it.json,flag:false,decision_error:e.message}};}});"
       }
     },
     {
       "name": "Deduplicate (Redis) - SET",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [2250, 200],
+      "position": [1900, 200],
       "parameters": {
         "operation": "set",
         "key": "={{ 'deal:' + ($json.sku || encodeURIComponent($json.url||'')) + ':' + Math.round($json.price || 0) }}",
@@ -205,129 +155,73 @@
         "setIfNotExists": true
       },
       "credentials": {
-        "redis": "REDIS_CONN"
+        "redis": {
+          "host": "={{ $env.REDIS_URL.replace('https://','').split('/')[0] }}",
+          "password": "={{ $env.REDIS_TOKEN }}",
+          "port": 6379,
+          "db": 0
+        }
       }
     },
     {
       "name": "Flag Filter",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [2400, 200],
+      "position": [2050, 200],
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.flag === true }}",
-              "operation": "isTrue"
-            }
-          ]
-        }
+        "conditions": { "boolean": [{ "value1": "={{ $json.flag === true }}", "operation": "isTrue" }] }
       }
     },
     {
       "name": "Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [2650, 200],
+      "position": [2200, 200],
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
         "text": "🔥 Glitch Alert!\n*{{ $json.title || 'No title' }}*\nPrice: ₹{{ $json.price }} ({{ Math.round(($json.discount||0)*100) }}% off)\nConfidence: {{ Math.round(($json.ml||$json.ml_score||0.5)*100) }}%\n[Open Link]({{ $json.url || '' }})",
         "optionsJson": "{ \"parse_mode\": \"Markdown\", \"disable_web_page_preview\": true }"
       },
-      "credentials": {
-        "telegramApi": "TELEGRAM_BOT"
-      }
+      "credentials": { "telegramApi": "TELEGRAM_BOT" }
     },
     {
       "name": "Checkout Guard",
       "type": "n8n-nodes-base.browser",
       "typeVersion": 1,
-      "position": [3000, 200],
+      "position": [2400, 200],
       "parameters": {
         "url": "={{ $json.url }}",
         "actions": [
-          {
-            "action": "waitForSelector",
-            "selector": "body",
-            "timeout": 8000
-          },
-          {
-            "action": "click",
-            "selector": "button.add-to-cart, a.add-to-cart",
-            "timeout": 5000,
-            "ignoreErrors": true
-          }
+          { "action": "waitForSelector", "selector": "body", "timeout": 8000 },
+          { "action": "click", "selector": "button.add-to-cart, a.add-to-cart", "timeout": 5000, "ignoreErrors": true }
         ],
-        "launchOptions": {
-          "headless": true,
-          "args": ["--no-sandbox"]
-        },
-        "options": {
-          "timeout": 20000,
-          "continueOnFail": true
-        }
+        "launchOptions": { "headless": true, "args": ["--no-sandbox"] },
+        "options": { "timeout": 20000, "continueOnFail": true }
       }
     },
     {
       "name": "Log Deal",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
-      "position": [3300, 200],
+      "position": [2600, 200],
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO deals (sku, title, price, baseline, discount, vendor, url, created_at) VALUES ({{ $json.sku ? '\\''+$json.sku+'\\'' : 'NULL' }}, {{ $json.title ? '\\''+$json.title.replace(/'/g,\"''\")+'\\'' : 'NULL' }}, {{ $json.price || 'NULL' }}, {{ $json.baseline || 'NULL' }}, {{ $json.discount || 'NULL' }}, {{ $json.vendor ? '\\''+$json.vendor+'\\'' : 'NULL' }}, {{ $json.url ? '\\''+$json.url+'\\'' : 'NULL' }}, now());"
+        "query": "INSERT INTO deals (sku,title,price,baseline,discount,vendor,url,created_at) VALUES ({{ $json.sku ? '\\''+$json.sku+'\\'' : 'NULL' }}, {{ $json.title ? '\\''+$json.title.replace(/'/g,\"''\")+'\\'' : 'NULL' }}, {{ $json.price || 'NULL' }}, {{ $json.baseline || 'NULL' }}, {{ $json.discount || 'NULL' }}, {{ $json.vendor ? '\\''+$json.vendor+'\\'' : 'NULL' }}, {{ $json.url ? '\\''+$json.url+'\\'' : 'NULL' }}, now());"
       },
       "credentials": {
-        "postgres": "POSTGRES_CONN"
-      }
-    },
-    {
-      "name": "Format Error Report",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [1500, 520],
-      "parameters": {
-        "language": "JavaScript",
-        "code": "return items.map(i => {\n  try{\n    const err = i.json.error || i.json.error_message || i.json.normalize_error || null;\n    const nodeName = i.json.__nodeName || i.json.node || 'unknown';\n    const payload = { node: nodeName, error: err, data: i.json };\n    return { json: payload };\n  }catch(e){ return { json: { node: 'Format Error Report', error: e.message } }; }\n});"
-      }
-    },
-    {
-      "name": "Send Error to Telegram",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [1700, 520],
-      "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "⚠️ Workflow Error\\nNode: {{$json.node}}\\nError: {{$json.error || 'unknown'}}\\nPayload snippet: {{$json.data ? JSON.stringify($json.data).slice(0,200) : 'n/a'}}"
-      },
-      "credentials": {
-        "telegramApi": "TELEGRAM_BOT"
-      }
-    },
-    {
-      "name": "Error Logger (Postgres)",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 1,
-      "position": [1900, 520],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO workflow_errors (node, message, payload, created_at) VALUES ({{ $json.node ? '\\''+$json.node+'\\'' : 'NULL' }}, {{ $json.error ? '\\''+$json.error.replace(/'/g,\"''\")+'\\'' : 'NULL' }}, {{ $json.data ? '\\''+JSON.stringify($json.data).replace(/'/g,\"''\")+'\\'' : 'NULL' }}, now());"
-      },
-      "credentials": {
-        "postgres": "POSTGRES_CONN"
+        "postgres": {
+          "host": "={{ $env.SUPABASE_URL.replace('https://','').split('.')[0]+'.supabase.co' }}",
+          "port": 5432,
+          "database": "postgres",
+          "user": "postgres",
+          "password": "={{ $env.SUPABASE_KEY }}"
+        }
       }
     }
   ],
   "connections": {
-    "Kickstart Cron": { "main": [[{ "node": "Load Config (Vault)", "type": "main", "index": 0 }]] },
-    "Load Config (Vault)": { "main": [[
-      { "node": "Flipkart Fetch", "type": "main", "index": 0 },
-      { "node": "Amazon Fetch", "type": "main", "index": 0 },
-      { "node": "Myntra Fetch", "type": "main", "index": 0 },
-      { "node": "Ajio Fetch", "type": "main", "index": 0 }
-    ]]},
+    "Kickstart Cron": { "main": [[{ "node": "Flipkart Fetch", "type": "main", "index": 0 }]] },
     "Flipkart Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
     "Amazon Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
     "Myntra Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
