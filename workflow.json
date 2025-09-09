@@ -1,5 +1,5 @@
 {
-  "name": "Deal-Hydra-Collector-Prod",
+  "name": "Super-Powered Glitch Detector",
   "active": false,
   "nodes": [
     {
@@ -36,8 +36,6 @@
         }
       }
     },
-
-    /* ---------- FETCH NODES: Browser and HTTP requests (all continueOnFail) ---------- */
     {
       "name": "Flipkart Fetch",
       "type": "n8n-nodes-base.browser",
@@ -124,8 +122,6 @@
         }
       }
     },
-
-    /* ---------- NORMALIZATION: robust extraction and canonicalization ---------- */
     {
       "name": "Normalize & Extract",
       "type": "n8n-nodes-base.code",
@@ -133,11 +129,9 @@
       "position": [1000, 200],
       "parameters": {
         "language": "JavaScript",
-        "code": "const norm = s => {\n  try{\n    if(!s && typeof s !== 'string') return null;\n    const cleaned = String(s).replace(/[^0-9.]/g, '');\n    if(!cleaned) return null;\n    return Number(cleaned.replace(/,/g,''));\n  }catch(e){ return null; }\n};\n\n// if incoming data is raw HTML string (Amazon/Myntra/Ajio) try to extract prices safely\nconst results = [];\nfor(const i of items){\n  try{\n    if(typeof i.json === 'string'){\n      // extract up to 5 price occurrences\n      const text = i.json;\n      const re = /₹\\s*([0-9,]+)/g;\n      const matches = Array.from(text.matchAll(re)).slice(0,5);\n      if(matches.length){\n        for(const m of matches){\n          const p = norm(m[1]);\n          if(p) results.push({ json: { vendor: 'Amazon/Other', price: p, mrp: null, url: null, timestamp: new Date().toISOString() } });\n        }\n      } else {\n        results.push({ json: { vendor: 'Amazon/Other', raw: text.slice(0,200) } });\n      }\n    } else if(Array.isArray(i.json)){\n      // already a list from browser evaluate (Flipkart)\n      for(const row of i.json){\n        try{\n          if(row && row.price){\n            results.push({ json: { vendor: row.vendor||'Flipkart', title: row.title||null, price: norm(row.price), mrp: norm(row.mrp), url: row.url||null, timestamp: row.timestamp||new Date().toISOString() } });\n          } else if(row && row.error){\n            results.push({ json: { vendor: 'Flipkart', error: row } });\n          }\n        }catch(e){ results.push({ json: { vendor: 'Flipkart', error: e.message } }); }\n      }\n    } else {\n      results.push({ json: i.json });\n    }\n  }catch(e){ results.push({ json: { error: 'normalize_failed', message: e && e.message } }); }\n}\n\nreturn results;"
+        "code": "const norm = s => {\n  try{\n    if(!s || typeof s !== 'string') return null;\n    const cleaned = String(s).replace(/[^0-9.]/g, '');\n    if(!cleaned) return null;\n    return Number(cleaned.replace(/,/g,''));\n  }catch(e){ return null; }\n};\nconst results = [];\nfor(const i of items){\n  try{\n    if(typeof i.json === 'string'){\n      const text = i.json;\n      const re = /₹\\s*([0-9,]+)/g;\n      const matches = Array.from(text.matchAll(re)).slice(0,5);\n      if(matches.length){\n        for(const m of matches){\n          const p = norm(m[1]);\n          if(p) results.push({ json: { vendor: 'Amazon/Other', price: p, mrp: null, url: null, timestamp: new Date().toISOString() } });\n        }\n      } else {\n        results.push({ json: { vendor: 'Amazon/Other', raw: text.slice(0,200) } });\n      }\n    } else if(Array.isArray(i.json)){\n      for(const row of i.json){\n        try{\n          if(row && row.price){\n            results.push({ json: { vendor: row.vendor||'Flipkart', title: row.title||null, price: norm(row.price), mrp: norm(row.mrp), url: row.url||null, timestamp: row.timestamp||new Date().toISOString() } });\n          } else if(row && row.error){\n            results.push({ json: { vendor: 'Flipkart', error: row } });\n          }\n        }catch(e){ results.push({ json: { vendor: 'Flipkart', error: e.message } }); }\n      }\n    } else {\n      results.push({ json: i.json });\n    }\n  }catch(e){ results.push({ json: { error: 'normalize_failed', message: e && e.message } }); }\n}\nreturn results;"
       }
     },
-
-    /* ---------- Baseline lookup: safe DB call + fallback ---------- */
     {
       "name": "Baseline Lookup",
       "type": "n8n-nodes-base.postgres",
@@ -149,10 +143,7 @@
       },
       "credentials": {
         "postgres": "POSTGRES_CONN"
-      },
-      "notesInFlow": true,
-      "alwaysOutputData": false,
-      "disabled": false
+      }
     },
     {
       "name": "Baseline Fallback",
@@ -164,8 +155,6 @@
         "code": "return items.map(it => {\n  try{\n    const db = it.json['Baseline Lookup'];\n    const baseline = db && db[0] && db[0].median_price ? Number(db[0].median_price) : (it.json.mrp || it.json.price || null);\n    return { json: { ...it.json, baseline } };\n  }catch(e){\n    return { json: { ...it.json, baseline: it.json.mrp || it.json.price || null, baseline_error: e.message } };\n  }\n});"
       }
     },
-
-    /* ---------- ML Scorer: safe POST with fallback ---------- */
     {
       "name": "ML Scorer",
       "type": "n8n-nodes-base.httpRequest",
@@ -193,8 +182,6 @@
         "code": "return items.map(it => {\n  try{\n    const score = (it.json && it.json.score) || (it.json && it.json.result && it.json.result.score) || null;\n    return { json: { ...it.json, ml_score: score === null ? 0.5 : Number(score) } };\n  }catch(e){\n    return { json: { ...it.json, ml_score: 0.5, ml_error: e.message } };\n  }\n});"
       }
     },
-
-    /* ---------- Decision and dedupe ---------- */
     {
       "name": "Anomaly Decision",
       "type": "n8n-nodes-base.code",
@@ -205,7 +192,6 @@
         "code": "return items.map(it => {\n  try{\n    const price = Number(it.json.price || 0);\n    const baseline = Number(it.json.baseline || price || 0);\n    const discount = baseline ? (1 - (price / baseline)) : 0;\n    const ml = Number(it.json.ml_score || 0.5);\n    const flag = (discount >= 0.95) && (ml >= 0.85);\n    return { json: { ...it.json, baseline, discount, ml, flag } };\n  }catch(e){ return { json: { ...it.json, flag: false, decision_error: e.message } }; }\n});"
       }
     },
-
     {
       "name": "Deduplicate (Redis) - SET",
       "type": "n8n-nodes-base.redis",
@@ -220,12 +206,8 @@
       },
       "credentials": {
         "redis": "REDIS_CONN"
-      },
-      "notesInFlow": true,
-      "alwaysOutputData": false
+      }
     },
-
-    /* ---------- Filter for flagged deals ---------- */
     {
       "name": "Flag Filter",
       "type": "n8n-nodes-base.if",
@@ -242,8 +224,6 @@
         }
       }
     },
-
-    /* ---------- Telegram alert (safe) ---------- */
     {
       "name": "Telegram Alert",
       "type": "n8n-nodes-base.telegram",
@@ -259,23 +239,6 @@
         "telegramApi": "TELEGRAM_BOT"
       }
     },
-
-    /* ---------- Telegram fallback logger: if Telegram fails, record to Postgres ---------- */
-    {
-      "name": "Alert Logger (Postgres)",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 1,
-      "position": [2850, 300],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO alert_logs (title, price, discount, ml, vendor, url, payload, created_at) VALUES ({{ $json.title ? '\\''+$json.title.replace(/'/g,\"''\")+'\\'' : 'NULL' }}, {{ $json.price || 'NULL' }}, {{ $json.discount || 'NULL' }}, {{ $json.ml || $json.ml_score || 'NULL' }}, {{ $json.vendor ? '\\''+$json.vendor+'\\'' : 'NULL' }}, {{ $json.url ? '\\''+$json.url+'\\'' : 'NULL' }}, {{ $json ? '\\''+JSON.stringify($json).replace(/'/g, \"''\")+'\\'' : 'NULL' }}, now());"
-      },
-      "credentials": {
-        "postgres": "POSTGRES_CONN"
-      }
-    },
-
-    /* ---------- Checkout Guard (browser) safe attempt ---------- */
     {
       "name": "Checkout Guard",
       "type": "n8n-nodes-base.browser",
@@ -306,8 +269,6 @@
         }
       }
     },
-
-    /* ---------- Log Deal to Postgres (safe) ---------- */
     {
       "name": "Log Deal",
       "type": "n8n-nodes-base.postgres",
@@ -321,8 +282,6 @@
         "postgres": "POSTGRES_CONN"
       }
     },
-
-    /* ---------- Generic Error Reporter (non-blocking) ---------- */
     {
       "name": "Format Error Report",
       "type": "n8n-nodes-base.code",
@@ -362,281 +321,26 @@
     }
   ],
   "connections": {
-    "Kickstart Cron": {
-      "main": [
-        [
-          {
-            "node": "Load Config (Vault)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Load Config (Vault)": {
-      "main": [
-        [
-          {
-            "node": "Flipkart Fetch",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Amazon Fetch",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Myntra Fetch",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Ajio Fetch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Flipkart Fetch": {
-      "main": [
-        [
-          {
-            "node": "Normalize & Extract",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Amazon Fetch": {
-      "main": [
-        [
-          {
-            "node": "Normalize & Extract",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Myntra Fetch": {
-      "main": [
-        [
-          {
-            "node": "Normalize & Extract",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ajio Fetch": {
-      "main": [
-        [
-          {
-            "node": "Normalize & Extract",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Normalize & Extract": {
-      "main": [
-        [
-          {
-            "node": "Baseline Lookup",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Baseline Lookup": {
-      "main": [
-        [
-          {
-            "node": "Baseline Fallback",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Format Error Report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Baseline Fallback": {
-      "main": [
-        [
-          {
-            "node": "ML Scorer",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ML Scorer": {
-      "main": [
-        [
-          {
-            "node": "ML Fallback",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Format Error Report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ML Fallback": {
-      "main": [
-        [
-          {
-            "node": "Anomaly Decision",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Anomaly Decision": {
-      "main": [
-        [
-          {
-            "node": "Deduplicate (Redis) - SET",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Deduplicate (Redis) - SET": {
-      "main": [
-        [
-          {
-            "node": "Flag Filter",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Format Error Report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Flag Filter": {
-      "main": [
-        [
-          {
-            "node": "Telegram Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Telegram Alert": {
-      "main": [
-        [
-          {
-            "node": "Checkout Guard",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Log Deal",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Alert Logger (Postgres)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Format Error Report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Checkout Guard": {
-      "main": [
-        [
-          {
-            "node": "Log Deal",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Format Error Report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Deal": {
-      "main": [
-        [
-          {
-            "node": "Format Error Report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format Error Report": {
-      "main": [
-        [
-          {
-            "node": "Send Error to Telegram",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Error Logger (Postgres)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send Error to Telegram": {
-      "main": [
-        [
-          {
-            "node": "Error Logger (Postgres)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
+    "Kickstart Cron": { "main": [[{ "node": "Load Config (Vault)", "type": "main", "index": 0 }]] },
+    "Load Config (Vault)": { "main": [[
+      { "node": "Flipkart Fetch", "type": "main", "index": 0 },
+      { "node": "Amazon Fetch", "type": "main", "index": 0 },
+      { "node": "Myntra Fetch", "type": "main", "index": 0 },
+      { "node": "Ajio Fetch", "type": "main", "index": 0 }
+    ]]},
+    "Flipkart Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
+    "Amazon Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
+    "Myntra Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
+    "Ajio Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
+    "Normalize & Extract": { "main": [[{ "node": "Baseline Lookup", "type": "main", "index": 0 }]] },
+    "Baseline Lookup": { "main": [[{ "node": "Baseline Fallback", "type": "main", "index": 0 }]] },
+    "Baseline Fallback": { "main": [[{ "node": "ML Scorer", "type": "main", "index": 0 }]] },
+    "ML Scorer": { "main": [[{ "node": "ML Fallback", "type": "main", "index": 0 }]] },
+    "ML Fallback": { "main": [[{ "node": "Anomaly Decision", "type": "main", "index": 0 }]] },
+    "Anomaly Decision": { "main": [[{ "node": "Deduplicate (Redis) - SET", "type": "main", "index": 0 }]] },
+    "Deduplicate (Redis) - SET": { "main": [[{ "node": "Flag Filter", "type": "main", "index": 0 }]] },
+    "Flag Filter": { "main": [[{ "node": "Telegram Alert", "type": "main", "index": 0 }]] },
+    "Telegram Alert": { "main": [[{ "node": "Checkout Guard", "type": "main", "index": 0 }, { "node": "Log Deal", "type": "main", "index": 0 }]] },
+    "Checkout Guard": { "main": [[{ "node": "Log Deal", "type": "main", "index": 0 }]] }
   }
 }
