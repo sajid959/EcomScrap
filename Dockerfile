@@ -1,48 +1,30 @@
-# Start from official n8n Alpine-based image
+# Start from official n8n Alpine image
 FROM n8nio/n8n:latest
 
-# Switch to root for package installs
 USER root
 WORKDIR /home/node
 
-# Install dependencies for Chromium/Playwright
+# Install dependencies for HTTP nodes
 RUN apk add --no-cache \
-    udev \
-    ttf-freefont \
-    chromium \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    dumb-init \
-    wget \
     bash \
+    curl \
+    jq \
     libc6-compat \
     libstdc++ \
-    xvfb \
     && rm -rf /var/cache/apk/*
 
-# Create custom node folder
-RUN mkdir -p /home/node/.n8n/custom
-
-# Install Browser node + Playwright
-RUN cd /home/node/.n8n/custom && npm init -y && \
-    npm install --omit=dev n8n-nodes-browser playwright
-
 # Fix permissions
-RUN chown -R node:node /home/node/.n8n
+RUN chown -R node:node /home/node
 
-# Back to node user
+# Switch back to node
 USER node
 WORKDIR /data
 
-# Copy workflows
+# Copy workflow into container
 COPY workflow.json /data/workflows/workflow.json
 
-# Environment variables
+# Environment variables (set in Render)
 ENV N8N_BASIC_AUTH_ACTIVE=true
-ENV N8N_BASIC_AUTH_USER=admin
-ENV N8N_BASIC_AUTH_PASSWORD=changeme
 ENV N8N_HOST=0.0.0.0
 ENV N8N_PORT=5678
 ENV NODE_ENV=production
@@ -52,5 +34,5 @@ ENV N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
 
 EXPOSE 5678
 
-# Import workflows & start n8n
+# Import workflow & start n8n
 ENTRYPOINT ["sh", "-c", "n8n import:workflow --input=/data/workflows --separate --overwrite && n8n start --tunnel"]

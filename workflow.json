@@ -1,152 +1,165 @@
 {
-  "name": "Super-Powered Glitch Detector",
+  "name": "Super-Powered Free HTTP Deal Detector",
   "active": false,
   "nodes": [
     {
-      "name": "Kickstart Cron",
+      "name": "Full Site Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [150, 100],
+      "parameters": {
+        "triggerTimes": [{"mode":"interval","value":5,"unit":"minutes"}]
+      }
+    },
+    {
+      "name": "Category Trigger",
       "type": "n8n-nodes-base.cron",
       "typeVersion": 1,
       "position": [150, 200],
       "parameters": {
-        "triggerTimes": [{ "mode": "interval", "value": 2, "unit": "minutes" }]
+        "triggerTimes": [{"mode":"interval","value":2,"unit":"minutes"}]
+      }
+    },
+    {
+      "name": "Trending Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [150, 300],
+      "parameters": {
+        "triggerTimes": [{"mode":"interval","value":30,"unit":"seconds"}]
       }
     },
     {
       "name": "Flipkart Fetch",
-      "type": "n8n-nodes-base.browser",
+      "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [400, 40],
+      "position": [400, 50],
       "parameters": {
-        "url": "={{ 'https://www.flipkart.com/search?q=' + ($json.keywords || 'electronics') }}",
-        "actions": [
-          { "action": "waitForSelector", "selector": "._1AtVbE, ._2kHMtA", "timeout": 12000 },
-          {
-            "action": "evaluate",
-            "script": "try { return Array.from(document.querySelectorAll('._2kHMtA')).map(n => { const title = n.querySelector('._4rR01T')?.innerText||null; const price = n.querySelector('._30jeq3')?.innerText||null; const mrp = n.querySelector('._3I9_wc')?.innerText||null; const link = n.querySelector('a')?.href||null; return { vendor: 'Flipkart', title, price, mrp, url: link, timestamp: new Date().toISOString() }; }); } catch(e){ return [{ error:'eval_failed', message:e.message }]; }"
-          }
-        ],
-        "launchOptions": { "headless": true, "args": ["--no-sandbox","--disable-dev-shm-usage"] },
-        "options": { "timeout": 20000, "continueOnFail": true }
+        "url": "https://www.flipkart.com/search?q={{ $json.keywords || 'electronics' }}",
+        "method": "GET",
+        "responseFormat": "string",
+        "options": {"timeout":15000,"continueOnFail":true},
+        "headers":{"User-Agent":"Mozilla/5.0"}
       }
     },
     {
       "name": "Amazon Fetch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [400, 200],
+      "position": [400, 120],
       "parameters": {
         "url": "https://www.amazon.in/s",
         "method": "GET",
         "responseFormat": "string",
-        "queryParameters": { "k": "={{ $json.keywords || 'electronics' }}" },
-        "headers": { "User-Agent": "Mozilla/5.0" },
-        "options": { "timeout": 15000, "retry": 2, "continueOnFail": true }
+        "queryParameters":{"k":"={{ $json.keywords || 'electronics' }}"},
+        "headers":{"User-Agent":"Mozilla/5.0"},
+        "options":{"timeout":15000,"continueOnFail":true}
       }
     },
     {
       "name": "Myntra Fetch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [400, 360],
+      "position": [400, 190],
       "parameters": {
         "url": "https://www.myntra.com/{{ $json.keywords || 'men-tshirts' }}",
         "method": "GET",
         "responseFormat": "string",
-        "headers": { "User-Agent": "Mozilla/5.0" },
-        "options": { "timeout": 12000, "continueOnFail": true }
+        "headers":{"User-Agent":"Mozilla/5.0"},
+        "options":{"timeout":12000,"continueOnFail":true}
       }
     },
     {
       "name": "Ajio Fetch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [400, 520],
+      "position": [400, 260],
       "parameters": {
         "url": "https://www.ajio.com/search/?text={{ $json.keywords || 'electronics' }}",
         "method": "GET",
         "responseFormat": "string",
-        "headers": { "User-Agent": "Mozilla/5.0" },
-        "options": { "timeout": 12000, "continueOnFail": true }
+        "headers":{"User-Agent":"Mozilla/5.0"},
+        "options":{"timeout":12000,"continueOnFail":true}
+      }
+    },
+    {
+      "name": "TataCliq Fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [400, 330],
+      "parameters": {
+        "url": "https://www.tatacliq.com/search/?text={{ $json.keywords || 'electronics' }}",
+        "method": "GET",
+        "responseFormat": "string",
+        "headers":{"User-Agent":"Mozilla/5.0"},
+        "options":{"timeout":12000,"continueOnFail":true}
+      }
+    },
+    {
+      "name": "Croma Fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [400, 400],
+      "parameters": {
+        "url": "https://www.croma.com/search/?text={{ $json.keywords || 'electronics' }}",
+        "method": "GET",
+        "responseFormat": "string",
+        "headers":{"User-Agent":"Mozilla/5.0"},
+        "options":{"timeout":12000,"continueOnFail":true}
+      }
+    },
+    {
+      "name": "Snapdeal Fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [400, 470],
+      "parameters": {
+        "url": "https://www.snapdeal.com/search?keyword={{ $json.keywords || 'electronics' }}",
+        "method": "GET",
+        "responseFormat": "string",
+        "headers":{"User-Agent":"Mozilla/5.0"},
+        "options":{"timeout":12000,"continueOnFail":true}
+      }
+    },
+    {
+      "name": "Reliance Digital Fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [400, 540],
+      "parameters": {
+        "url": "https://www.reliancedigital.in/search?q={{ $json.keywords || 'electronics' }}",
+        "method": "GET",
+        "responseFormat": "string",
+        "headers":{"User-Agent":"Mozilla/5.0"},
+        "options":{"timeout":12000,"continueOnFail":true}
       }
     },
     {
       "name": "Normalize & Extract",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [700, 200],
+      "position": [650, 300],
       "parameters": {
         "language": "JavaScript",
-        "code": "const norm=s=>{try{if(!s||typeof s!=='string')return null; const cleaned=String(s).replace(/[^0-9.]/g,''); if(!cleaned)return null; return Number(cleaned.replace(/,/g,''));}catch(e){return null;}}; const results=[]; for(const i of items){try{if(typeof i.json==='string'){const text=i.json; const re=/₹\\s*([0-9,]+)/g; const matches=Array.from(text.matchAll(re)).slice(0,5); if(matches.length){for(const m of matches){const p=norm(m[1]); if(p) results.push({json:{vendor:'Amazon/Other', price:p, mrp:null, url:null, timestamp:new Date().toISOString()}});}} else {results.push({json:{vendor:'Amazon/Other', raw:text.slice(0,200)}});}} else if(Array.isArray(i.json)){for(const row of i.json){try{if(row&&row.price){results.push({json:{vendor:row.vendor||'Flipkart', title:row.title||null, price:norm(row.price), mrp:norm(row.mrp), url:row.url||null, timestamp:row.timestamp||new Date().toISOString()}});} else if(row&&row.error){results.push({json:{vendor:'Flipkart', error:row}});}}catch(e){results.push({json:{vendor:'Flipkart', error:e.message}});}}} else {results.push({json:i.json});}}catch(e){results.push({json:{error:'normalize_failed', message:e.message}});}} return results;"
+        "code": "const norm = s => { try{ if(!s||typeof s!=='string') return null; const cleaned = String(s).replace(/[^0-9.]/g,''); return Number(cleaned.replace(/,/g,'')); } catch(e){ return null; } }; const results=[]; for(const i of items){ try{ if(typeof i.json==='string'){ const text=i.json; const re=/₹\\s*([0-9,]+)/g; const matches=Array.from(text.matchAll(re)).slice(0,5); if(matches.length){ for(const m of matches){ const p=norm(m[1]); if(p) results.push({json:{vendor:'Site', price:p, mrp:null, url:null, timestamp:new Date().toISOString()}}); } } else { results.push({json:{vendor:'Site', raw:text.slice(0,200)}}); } } else { results.push({json:i.json}); } } catch(e){ results.push({json:{error:'normalize_failed', message:e.message}}); } } return results;"
       }
     },
     {
       "name": "Baseline Lookup",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 1,
-      "position": [1000, 200],
+      "position": [900, 300],
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT median_price FROM price_baseline WHERE sku = {{ $json.sku ? '\\''+$json.sku+'\\'' : 'NULL' }} LIMIT 1;"
       },
-      "credentials": {
-        "postgres": {
-          "host": "={{ $env.SUPABASE_URL.replace('https://','').split('.')[0]+'.supabase.co' }}",
-          "port": 5432,
-          "database": "postgres",
-          "user": "postgres",
-          "password": "={{ $env.SUPABASE_KEY }}"
-        }
-      }
+      "credentials": { "postgres": "SUPABASE_CONN" }
     },
     {
-      "name": "Baseline Fallback",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [1200, 200],
-      "parameters": {
-        "language": "JavaScript",
-        "code": "return items.map(it=>{try{const db=it.json['Baseline Lookup'];const baseline=db&&db[0]&&db[0].median_price?Number(db[0].median_price):(it.json.mrp||it.json.price||null);return{json:{...it.json,baseline}};}catch(e){return{json:{...it.json,baseline:it.json.mrp||it.json.price||null,baseline_error:e.message}};}});"
-      }
-    },
-    {
-      "name": "ML Scorer",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [1400, 200],
-      "parameters": {
-        "url": "={{ $env.ML_URL }}",
-        "method": "POST",
-        "responseFormat": "json",
-        "jsonParameters": true,
-        "bodyParametersJson": "{ \"title\": \"{{$json.title||''}}\", \"price\": {{$json.price||null}}, \"mrp\": {{$json.mrp||null}}, \"baseline\": {{$json.baseline||null}}, \"vendor\": \"{{$json.vendor||''}}\" }",
-        "options": { "timeout": 8000, "continueOnFail": true }
-      }
-    },
-    {
-      "name": "ML Fallback",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [1550, 200],
-      "parameters": {
-        "language": "JavaScript",
-        "code": "return items.map(it=>{try{const score=(it.json&&it.json.score)||(it.json&&it.json.result&&it.json.result.score)||null;return{json:{...it.json,ml_score:score===null?0.5:Number(score)}};}catch(e){return{json:{...it.json,ml_score:0.5,ml_error:e.message}};}});"
-      }
-    },
-    {
-      "name": "Anomaly Decision",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [1700, 200],
-      "parameters": {
-        "language": "JavaScript",
-        "code": "return items.map(it=>{try{const price=Number(it.json.price||0);const baseline=Number(it.json.baseline||price||0);const discount=baseline?(1-(price/baseline)):0;const ml=Number(it.json.ml_score||0.5);const flag=(discount>=0.95)&&(ml>=0.85);return{json:{...it.json,baseline,discount,ml,flag}};}catch(e){return{json:{...it.json,flag:false,decision_error:e.message}};}});"
-      }
-    },
-    {
-      "name": "Deduplicate (Redis) - SET",
+      "name": "Deduplicate Redis",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [1900, 200],
+      "position": [1150, 300],
       "parameters": {
         "operation": "set",
         "key": "={{ 'deal:' + ($json.sku || encodeURIComponent($json.url||'')) + ':' + Math.round($json.price || 0) }}",
@@ -154,87 +167,46 @@
         "expirationInSeconds": 86400,
         "setIfNotExists": true
       },
-      "credentials": {
-        "redis": {
-          "host": "={{ $env.REDIS_URL.replace('https://','').split('/')[0] }}",
-          "password": "={{ $env.REDIS_TOKEN }}",
-          "port": 6379,
-          "db": 0
-        }
-      }
+      "credentials": { "redis": "REDIS_CONN" }
     },
     {
       "name": "Flag Filter",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [2050, 200],
+      "position": [1300, 300],
       "parameters": {
-        "conditions": { "boolean": [{ "value1": "={{ $json.flag === true }}", "operation": "isTrue" }] }
+        "conditions": { "boolean": [ { "value1": "={{ $json.price && $json.mrp ? ($json.price/$json.mrp) <= 0.01 : false }}", "operation": "isTrue" } ] }
       }
     },
     {
       "name": "Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [2200, 200],
+      "position": [1500, 300],
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "🔥 Glitch Alert!\n*{{ $json.title || 'No title' }}*\nPrice: ₹{{ $json.price }} ({{ Math.round(($json.discount||0)*100) }}% off)\nConfidence: {{ Math.round(($json.ml||$json.ml_score||0.5)*100) }}%\n[Open Link]({{ $json.url || '' }})",
+        "text": "🔥 Loot Alert!\n*{{ $json.vendor || 'No vendor' }}*\nPrice: ₹{{ $json.price }}\n[Open Link]({{ $json.url || '' }})",
         "optionsJson": "{ \"parse_mode\": \"Markdown\", \"disable_web_page_preview\": true }"
       },
       "credentials": { "telegramApi": "TELEGRAM_BOT" }
-    },
-    {
-      "name": "Checkout Guard",
-      "type": "n8n-nodes-base.browser",
-      "typeVersion": 1,
-      "position": [2400, 200],
-      "parameters": {
-        "url": "={{ $json.url }}",
-        "actions": [
-          { "action": "waitForSelector", "selector": "body", "timeout": 8000 },
-          { "action": "click", "selector": "button.add-to-cart, a.add-to-cart", "timeout": 5000, "ignoreErrors": true }
-        ],
-        "launchOptions": { "headless": true, "args": ["--no-sandbox"] },
-        "options": { "timeout": 20000, "continueOnFail": true }
-      }
-    },
-    {
-      "name": "Log Deal",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 1,
-      "position": [2600, 200],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO deals (sku,title,price,baseline,discount,vendor,url,created_at) VALUES ({{ $json.sku ? '\\''+$json.sku+'\\'' : 'NULL' }}, {{ $json.title ? '\\''+$json.title.replace(/'/g,\"''\")+'\\'' : 'NULL' }}, {{ $json.price || 'NULL' }}, {{ $json.baseline || 'NULL' }}, {{ $json.discount || 'NULL' }}, {{ $json.vendor ? '\\''+$json.vendor+'\\'' : 'NULL' }}, {{ $json.url ? '\\''+$json.url+'\\'' : 'NULL' }}, now());"
-      },
-      "credentials": {
-        "postgres": {
-          "host": "={{ $env.SUPABASE_URL.replace('https://','').split('.')[0]+'.supabase.co' }}",
-          "port": 5432,
-          "database": "postgres",
-          "user": "postgres",
-          "password": "={{ $env.SUPABASE_KEY }}"
-        }
-      }
     }
   ],
   "connections": {
-    "Kickstart Cron": { "main": [[{ "node": "Flipkart Fetch", "type": "main", "index": 0 }]] },
-    "Flipkart Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
-    "Amazon Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
-    "Myntra Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
-    "Ajio Fetch": { "main": [[{ "node": "Normalize & Extract", "type": "main", "index": 0 }]] },
-    "Normalize & Extract": { "main": [[{ "node": "Baseline Lookup", "type": "main", "index": 0 }]] },
-    "Baseline Lookup": { "main": [[{ "node": "Baseline Fallback", "type": "main", "index": 0 }]] },
-    "Baseline Fallback": { "main": [[{ "node": "ML Scorer", "type": "main", "index": 0 }]] },
-    "ML Scorer": { "main": [[{ "node": "ML Fallback", "type": "main", "index": 0 }]] },
-    "ML Fallback": { "main": [[{ "node": "Anomaly Decision", "type": "main", "index": 0 }]] },
-    "Anomaly Decision": { "main": [[{ "node": "Deduplicate (Redis) - SET", "type": "main", "index": 0 }]] },
-    "Deduplicate (Redis) - SET": { "main": [[{ "node": "Flag Filter", "type": "main", "index": 0 }]] },
-    "Flag Filter": { "main": [[{ "node": "Telegram Alert", "type": "main", "index": 0 }]] },
-    "Telegram Alert": { "main": [[{ "node": "Checkout Guard", "type": "main", "index": 0 }, { "node": "Log Deal", "type": "main", "index": 0 }]] },
-    "Checkout Guard": { "main": [[{ "node": "Log Deal", "type": "main", "index": 0 }]] }
+    "Full Site Trigger": { "main": [[{ "node": "Flipkart Fetch","type":"main","index":0},{ "node":"Amazon Fetch","type":"main","index":0},{ "node":"Myntra Fetch","type":"main","index":0},{ "node":"Ajio Fetch","type":"main","index":0},{ "node":"TataCliq Fetch","type":"main","index":0},{ "node":"Croma Fetch","type":"main","index":0},{ "node":"Snapdeal Fetch","type":"main","index":0},{ "node":"Reliance Digital Fetch","type":"main","index":0}]]},
+    "Category Trigger": { "main": [[{ "node": "Flipkart Fetch","type":"main","index":0}]]},
+    "Trending Trigger": { "main": [[{ "node": "Flipkart Fetch","type":"main","index":0}]]},
+    "Flipkart Fetch": { "main": [[{"node":"Normalize & Extract","type":"main","index":0}]]},
+    "Amazon Fetch": { "main": [[{"node":"Normalize & Extract","type":"main","index":0}]]},
+    "Myntra Fetch": { "main": [[{"node":"Normalize & Extract","type":"main","index":0}]]},
+    "Ajio Fetch": { "main": [[{"node":"Normalize & Extract","type":"main","index":0}]]},
+    "TataCliq Fetch": { "main": [[{"node":"Normalize & Extract","type":"main","index":0}]]},
+    "Croma Fetch": { "main": [[{"node":"Normalize & Extract","type":"main","index":0}]]},
+    "Snapdeal Fetch": { "main": [[{"node":"Normalize & Extract","type":"main","index":0}]]},
+    "Reliance Digital Fetch": { "main": [[{"node":"Normalize & Extract","type":"main","index":0}]]},
+    "Normalize & Extract": { "main": [[{"node":"Baseline Lookup","type":"main","index":0}]]},
+    "Baseline Lookup": { "main": [[{"node":"Deduplicate Redis","type":"main","index":0}]]},
+    "Deduplicate Redis": { "main": [[{"node":"Flag Filter","type":"main","index":0}]]},
+    "Flag Filter": { "main": [[{"node":"Telegram Alert","type":"main","index":0}]]}
   }
 }
